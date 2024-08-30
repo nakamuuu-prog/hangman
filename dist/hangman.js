@@ -36,8 +36,6 @@ class Quiz {
         return this.questions.length;
     }
 }
-const questions = questions_test_json_1.default;
-const quiz = new Quiz(questions);
 // 入出力処理のためのインターフェイスを提供するインスタンスを生成
 // 入出力の方法をオブジェクトで渡す
 const rl = promises_1.default.createInterface({
@@ -60,10 +58,10 @@ const CLI = {
         rl.close(); // プロンプトの終了
     },
     outPut(message, color = "white") {
-        console.log(chalk_1.default[color](message), "¥n");
+        console.log(chalk_1.default[color](message), "\n");
     },
     outPutAnswer(message) {
-        console.log(figlet_1.default.textSync(message, { font: "Big" }), "¥n");
+        console.log(figlet_1.default.textSync(message, { font: "Big" }), "\n");
     },
 };
 // CLIテスト用関数
@@ -138,7 +136,7 @@ class Message {
         this.ui.outPut(`残り${quiz.lefts() + 1}問`);
     }
     start() {
-        this.ui.outPut("¥nGame Start!!");
+        this.ui.outPut("\nGame Start!!");
     }
     enterSomething() {
         this.ui.outPut("何か文字を入力してください。", "red");
@@ -162,4 +160,84 @@ class Message {
         this.ui.outPut("ゲーム終了です！お疲れ様でした！");
     }
 }
+class Game {
+    quiz;
+    message;
+    stage;
+    ui;
+    constructor(quiz, message, ui) {
+        this.quiz = quiz;
+        this.message = message;
+        this.ui = ui;
+        this.stage = new Stage(this.quiz.getNext());
+    }
+    shouldEnd() {
+        if (this.stage.isGameOver()) {
+            return true;
+        }
+        if (!this.quiz.hasNext() && this.stage.isCorrect()) {
+            return true;
+        }
+        return false;
+    }
+    next(isCorrect) {
+        if (!isCorrect) {
+            this.stage.decrementAttempts();
+        }
+        if (this.shouldEnd()) {
+            return { stage: this.stage, done: true }; // ゲーム終了のためにdoneをtrueにする
+        }
+        if (isCorrect) {
+            this.stage = new Stage(this.quiz.getNext());
+        }
+        return { stage: this.stage, done: false }; // ゲームは終了しない
+    }
+    async start() {
+        this.ui.clear();
+        this.message.start();
+        let state = {
+            stage: this.stage,
+            done: false,
+        };
+        while (!state.done) {
+            if (state.stage === undefined)
+                break;
+            const { stage } = state;
+            this.message.leftQuestions(this.quiz);
+            this.message.askQuestion(this.stage);
+            const userInput = await this.ui.input();
+            if (!userInput) {
+                this.message.enterSomething();
+                state = this.next(false);
+                continue;
+            }
+            stage.updateAnswer(userInput);
+            if (stage.isCorrect()) {
+                this.message.correct(stage.question);
+                state = this.next(true);
+                continue;
+            }
+            if (stage.isTooLong(userInput)) {
+                this.message.notCorrect(userInput);
+                state = this.next(false);
+                continue;
+            }
+            if (stage.isIncludes(userInput)) {
+                this.message.hit(userInput);
+                continue;
+            }
+            this.message.notInclude(userInput);
+            state = this.next(false);
+        }
+        if (state.stage.isGameOver()) {
+            this.message.gaemover(this.stage.question);
+        }
+        this.message.end;
+        this.ui.destroy();
+    }
+}
+const questions = questions_test_json_1.default;
+const quiz = new Quiz(questions);
 const message = new Message(CLI);
+const game = new Game(quiz, message, CLI);
+game.start();
